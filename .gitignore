@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+config.json
+k8s/
