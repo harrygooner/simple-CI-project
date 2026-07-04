@@ -1,0 +1,175 @@
+pipeline {
+    agent any
+    
+    // ĐỊNH NGHĨA CÁC BIẾN MÔI TRƯỜNG SỬ DỤNG CHUNG
+    environment {
+        DOCKER_IMAGE = "thitbobam/python-app"
+        // Sử dụng BUILD_NUMBER của Jenkins để versioning image tự động (VD: v1, v2, v3...)
+        IMAGE_TAG = "v${env.BUILD_NUMBER}" 
+        HELM_RELEASE_NAME = "python-app-release"
+        // Tên thư mục chứa cấu hình Helm
+        HELM_DIR = "./helm" 
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "1. Lấy mã nguồn mới nhất từ Repository..."
+                checkout scm
+            }
+        }
+
+        stage('Unit Test') {
+            steps {
+                echo "2. Chạy kiểm thử Unit Test cho ứng dụng Python..."
+                sh '''
+                pip install -r app/requirements.txt
+                # Chỉ định đúng thư mục chứa file test_app.py
+                python3 -m pytest app/test/ 
+                '''
+            }
+        }
+
+        stage('Build & Push Docker Image') {
+            steps {
+                script {
+                    echo "3. Build và Push Image: ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                    // Yêu cầu: Bạn phải tạo credential loại 'Username with password' tên 'dockerhub-creds' trong Jenkins
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
+                        sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                        sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ./app"
+                        sh "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to K8s with Helm') {
+            steps {
+                echo "4. Triển khai ứng dụng lên Kubernetes bằng Helm..."
+                sh """
+                helm upgrade --install ${HELM_RELEASE_NAME} ${HELM_DIR} \
+                    --set image.tag=${IMAGE_TAG} \
+                    --set image.repository=${DOCKER_IMAGE} \
+                    --namespace default
+                """
+            }
+        }
+
+pipeline {
+    agent any
+    
+    // ĐỊNH NGHĨA CÁC BIẾN MÔI TRƯỜNG SỬ DỤNG CHUNG
+    environment {
+        DOCKER_IMAGE = "thitbobam/python-app"
+        // Sử dụng BUILD_NUMBER của Jenkins để versioning image tự động (VD: v1, v2, v3...)
+        IMAGE_TAG = "v${env.BUILD_NUMBER}" 
+        HELM_RELEASE_NAME = "python-app-release"
+        // Tên thư mục chứa cấu hình Helm
+        HELM_DIR = "./helm" 
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "1. Lấy mã nguồn mới nhất từ Repository..."
+                checkout scm
+            }
+        }
+
+        stage('Unit Test') {
+            steps {
+                echo "2. Chạy kiểm thử Unit Test cho ứng dụng Python..."
+                sh '''
+                pip install -r app/requirements.txt
+                # Chỉ định đúng thư mục chứa file test_app.py
+                python3 -m pytest app/test/ 
+                '''
+            }
+        }
+
+        stage('Build & Push Docker Image') {
+            steps {
+                script {
+                    echo "3. Build và Push Image: ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                    // Yêu cầu: Bạn phải tạo credential loại 'Username with password' tên 'dockerhub-creds' trong Jenkins
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
+                        sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                        sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ./app"
+                        sh "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to K8s with Helm') {
+            steps {
+                echo "4. Triển khai ứng dụng lên Kubernetes bằng Helm..."
+                sh """
+                helm upgrade --install ${HELM_RELEASE_NAME} ${HELM_DIR} \
+                    --set image.tag=${IMAGE_TAG} \
+                    --set image.repository=${DOCKER_IMAGE} \
+                    --namespace default
+                """
+            }
+        }
+
+        stage('Integration Test & Health Check') {
+            steps {
+                script {
+                    echo "5. Kiểm tra sức khỏe của Server sau khi Deploy..."
+                    
+                    // Bước 5.1: Đợi Pod thực sự thay xong image và ở trạng thái Ready
+                    sh "kubectl rollout status deployment/python-app-release-python-app --timeout=90s"
+                    
+                    // Bước 5.2: Chạy Port-Forward ngầm, lấy PID, Test cURL và Dọn dẹp
+                    sh """
+                    echo "-> Mở kết nối Port-Forwarding (Background)..."
+                    kubectl port-forward service/python-app-release-python-app 8080:80 &
+                    PORT_FORWARD_PID=\$!
+                    
+                    echo "-> Đợi 5 giây để cổng mạng ổn định..."
+                    sleep 5
+                    
+                    echo "-> Bắn request kiểm tra tới Server..."
+                    HTTP_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
+                    
+                    if [ "\$HTTP_STATUS" -eq 200 ]; then
+                        echo "✅ Integration Test SUCCESS! Server phản hồi mã 200 OK."
+                        kill \$PORT_FORWARD_PID
+                    else
+                        echo "❌ Integration Test FAILED! Mã lỗi nhận được: \$HTTP_STATUS"
+                        kill \$PORT_FORWARD_PID
+                        exit 1 # Ép Pipeline thất bại để kích hoạt khối failure bên dưới
+                    fi
+                    """
+                }
+            }
+        }
+    }
+
+    // XỬ LÝ KẾT QUẢ CUỐI CÙNG (GỬI THÔNG BÁO HOẶC ROLLBACK)
+    post {
+        success {
+            echo "🎉 TẤT CẢ THÀNH CÔNG! Ứng dụng phiên bản ${IMAGE_TAG} đã được Live."
+        }
+        failure {
+            echo "🚨 PIPELINE THẤT BẠI! Đang tiến hành Rollback về phiên bản an toàn trước đó..."
+            // Sử dụng Helm để rollback nếu bước Deploy hoặc Test thất bại
+            sh "helm rollback ${HELM_RELEASE_NAME} || echo 'Rollback không thành công (Có thể đây là lần deploy đầu tiên)'"
+        }
+    }
+}
+
+    // XỬ LÝ KẾT QUẢ CUỐI CÙNG (GỬI THÔNG BÁO HOẶC ROLLBACK)
+    post {
+        success {
+            echo "🎉 TẤT CẢ THÀNH CÔNG! Ứng dụng phiên bản ${IMAGE_TAG} đã được Live."
+        }
+        failure {
+            echo "🚨 PIPELINE THẤT BẠI! Đang tiến hành Rollback về phiên bản an toàn trước đó..."
+            // Sử dụng Helm để rollback nếu bước Deploy hoặc Test thất bại
+            sh "helm rollback ${HELM_RELEASE_NAME} || echo 'Rollback không thành công (Có thể đây là lần deploy đầu tiên)'"
+        }
+    }
+}
