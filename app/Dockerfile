@@ -1,7 +1,5 @@
-# Sử dụng base image nhẹ để tối ưu build time (một tiêu chí trong Task 4)
 FROM python:3.9-slim
 
-# Thiết lập thư mục làm việc
 WORKDIR /app
 
 # Copy requirements và cài đặt

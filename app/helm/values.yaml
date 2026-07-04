@@ -1,6 +1,11 @@
 replicaCount: 2
 image:
   repository: thitbobam/python-app
-  tag: "0.1.0" # Sẽ được Jenkins truyền vào khi deploy
+  tag: "0.1.0"
   pullPolicy: Always # Để test thực tế trên CI/CD
 env: "production"
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 5000
+  nodePort: 30080
