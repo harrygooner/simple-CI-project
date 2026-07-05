@@ -14,7 +14,7 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--web.enable-lifecycle"
     networks:
-      - cicda
+      - cicd
       - kind
       - monitoring
 

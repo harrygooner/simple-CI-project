@@ -36,3 +36,23 @@ groups:
         annotations:
           summary: "High application latency"
           description: "P95 latency is above 500ms for more than 2 minutes. Check request volume, pod health and recent changes."
+
+      - alert: AppPodRestartDetected
+        expr: sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace="devops-demo", pod=~"python-app.*"}[10m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          component: kubernetes-app
+        annotations:
+          summary: "Python app Pod restarted"
+          description: "A python-app Pod restarted in the last 10 minutes. Check kubectl logs and pod events."
+
+      - alert: AppDeploymentUnavailable
+        expr: kube_deployment_status_replicas_available{namespace="devops-demo", deployment="python-app"} < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: kubernetes-app
+        annotations:
+          summary: "Python app has no available replicas"
+          description: "Deployment python-app has less than one available replica."

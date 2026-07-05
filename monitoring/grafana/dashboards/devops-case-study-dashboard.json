@@ -1,10 +1,10 @@
 {
   "id": null,
-  "uid": "devops-case-study-no-cadvisor",
-  "title": "DevOps Case Study - App & Jenkins Observability",
+  "uid": "devops-case-study-resource-monitoring",
+  "title": "DevOps Case Study - App, Jenkins & K8s Pod Observability",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "panels": [
     {
@@ -39,7 +39,8 @@
           ]
         },
         "overrides": []
-      }
+      },
+      "id": 1
     },
     {
       "type": "stat",
@@ -73,7 +74,8 @@
           ]
         },
         "overrides": []
-      }
+      },
+      "id": 2
     },
     {
       "type": "timeseries",
@@ -89,7 +91,8 @@
           "expr": "sum(rate(flask_http_requests_total[1m]))",
           "legendFormat": "requests/sec"
         }
-      ]
+      ],
+      "id": 3
     },
     {
       "type": "timeseries",
@@ -105,7 +108,8 @@
           "expr": "sum by (http_status) (rate(flask_http_requests_total[1m]))",
           "legendFormat": "{{http_status}}"
         }
-      ]
+      ],
+      "id": 4
     },
     {
       "type": "timeseries",
@@ -121,7 +125,8 @@
           "expr": "histogram_quantile(0.95, sum(rate(flask_http_request_duration_seconds_bucket[5m])) by (le))",
           "legendFormat": "p95 latency"
         }
-      ]
+      ],
+      "id": 5
     },
     {
       "type": "timeseries",
@@ -137,7 +142,8 @@
           "expr": "histogram_quantile(0.50, sum(rate(flask_http_request_duration_seconds_bucket[5m])) by (le))",
           "legendFormat": "p50 latency"
         }
-      ]
+      ],
+      "id": 6
     },
     {
       "type": "timeseries",
@@ -153,7 +159,8 @@
           "expr": "sum by (endpoint) (rate(flask_http_requests_total[1m]))",
           "legendFormat": "{{endpoint}}"
         }
-      ]
+      ],
+      "id": 7
     },
     {
       "type": "timeseries",
@@ -169,11 +176,12 @@
           "expr": "sum(rate(flask_http_requests_total{http_status=~\"5..\"}[1m]))",
           "legendFormat": "5xx/sec"
         }
-      ]
+      ],
+      "id": 8
     },
     {
       "type": "text",
-      "title": "Kubernetes Resource Metrics Note",
+      "title": "Resource Metrics Notes",
       "gridPos": {
         "x": 0,
         "y": 25,
@@ -182,8 +190,105 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "This dashboard intentionally excludes standalone cAdvisor. For Kubernetes Pod CPU/Memory, install kube-prometheus-stack and query kubelet/kube-state-metrics metrics such as `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`, and `kube_pod_container_status_restarts_total`. See `monitoring/kubernetes/POD_RESOURCE_PROMQL.md`."
-      }
+        "content": "Resource panels below focus only on **Kubernetes application Pod metrics**: Pod CPU, Pod memory, restart count and Deployment available replicas. These panels do **not** use a standalone cAdvisor container in Docker Compose. They require Kubernetes-native metrics such as kubelet/cAdvisor metrics and kube-state-metrics, for example through `kube-prometheus-stack`. If kube-prometheus-stack is not installed or connected as a data source, these panels may show no data."
+      },
+      "id": 9
+    },
+    {
+      "type": "timeseries",
+      "title": "App Pod CPU Usage",
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"devops-demo\", pod=~\"python-app.*\", container!=\"POD\", image!=\"\"}[5m]))",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores"
+        },
+        "overrides": []
+      },
+      "description": "CPU usage of python-app Pods in Kubernetes. Requires kubelet/cAdvisor metrics or kube-prometheus-stack.",
+      "id": 10
+    },
+    {
+      "type": "timeseries",
+      "title": "App Pod Memory Usage",
+      "gridPos": {
+        "x": 12,
+        "y": 30,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"devops-demo\", pod=~\"python-app.*\", container!=\"POD\", image!=\"\"})",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "description": "Memory working set of python-app Pods. Requires kubelet/cAdvisor metrics or kube-prometheus-stack.",
+      "id": 11
+    },
+    {
+      "type": "timeseries",
+      "title": "App Pod Restart Count",
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"devops-demo\", pod=~\"python-app.*\"})",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "description": "Restart count of python-app Pods. Requires kube-state-metrics.",
+      "id": 12
+    },
+    {
+      "type": "timeseries",
+      "title": "Deployment Available Replicas",
+      "gridPos": {
+        "x": 12,
+        "y": 38,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_available{namespace=\"devops-demo\", deployment=\"python-app\"}",
+          "legendFormat": "available replicas"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "description": "Available replicas for python-app Deployment. Requires kube-state-metrics.",
+      "id": 13
     }
   ]
 }
