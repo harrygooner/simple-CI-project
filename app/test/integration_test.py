@@ -1,12 +1,13 @@
 import os
-
 import requests
 
 
-def test_live_server_healthy():
-    target_url = os.environ.get("APP_URL", "http://localhost:8080/")
+BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8081")
 
-    response = requests.get(target_url, timeout=5)
+
+def test_app_health():
+    response = requests.get(f"{BASE_URL}/", timeout=10)
+
     assert response.status_code == 200
 
     data = response.json()

@@ -1,11 +1,18 @@
 replicaCount: 2
+
 image:
   repository: thitbobam/python-app
-  tag: "0.2.0"
-  pullPolicy: Always # Để test thực tế trên CI/CD
-env: "production"
+  tag: latest
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: dockerhub-pull-secret
+
+env:
+  APP_ENV: production
+
 service:
   type: ClusterIP
-  port: 80
+  port: 5000
   targetPort: 5000
   nodePort: 30080

@@ -1,3 +1,48 @@
+def runIntegrationTest() {
+    sh '''
+        set -e
+
+        export KUBECONFIG="${KUBECONFIG_FILE}"
+
+        echo "Starting port-forward for integration test..."
+        kubectl -n ${K8S_NAMESPACE} port-forward svc/${HELM_RELEASE} ${LOCAL_CHECK_PORT}:${K8S_SERVICE_PORT} > /tmp/port-forward.log 2>&1 &
+        PF_PID=$!
+
+        cleanup() {
+            echo "Stopping port-forward..."
+            kill ${PF_PID} 2>/dev/null || true
+        }
+        trap cleanup EXIT
+
+        sleep 8
+
+        echo "Running Python integration test..."
+        cd ${APP_DIR}
+        . .venv/bin/activate
+
+        set +e
+        APP_BASE_URL=http://127.0.0.1:${LOCAL_CHECK_PORT} python -m pytest test/integration_test.py -v --junitxml=test-results/integration.xml
+        TEST_STATUS=$?
+        set -e
+
+        if [ ${TEST_STATUS} -ne 0 ]; then
+            echo "Integration test failed."
+            echo "Port-forward logs:"
+            cat /tmp/port-forward.log || true
+
+            echo "Application logs:"
+            kubectl -n ${K8S_NAMESPACE} logs deployment/${HELM_RELEASE} --tail=100 || true
+
+            echo "Rolling back Helm release to previous revision..."
+            helm rollback ${HELM_RELEASE} -n ${K8S_NAMESPACE} --wait --timeout 3m || true
+
+            exit ${TEST_STATUS}
+        fi
+
+        echo "Integration test passed."
+    '''
+}
+
 pipeline {
     agent {
         label 'docker-agent'
@@ -19,7 +64,10 @@ pipeline {
 
         K8S_NAMESPACE = 'devops-demo'
         HELM_RELEASE = 'python-app'
+        IMAGE_PULL_SECRET = 'dockerhub-pull-secret'
+
         LOCAL_CHECK_PORT = '8081'
+        K8S_SERVICE_PORT = '5000'
     }
 
     stages {
@@ -32,10 +80,28 @@ pipeline {
         stage('Prepare') {
             steps {
                 sh '''
-                    echo "Checking tools..."
+                    set -e
+
+                    echo "Current node:"
+                    hostname
+                    whoami
+                    echo "PATH=$PATH"
+
+                    echo "Checking required tools..."
+                    which python3
                     python3 --version
+
+                    which git
+                    git --version
+
+                    which docker
                     docker --version
+                    docker ps
+
+                    which kubectl
                     kubectl version --client
+
+                    which helm
                     helm version
                 '''
             }
@@ -44,11 +110,17 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
+                    set -e
+
                     cd ${APP_DIR}
+
                     python3 -m venv .venv
                     . .venv/bin/activate
+
                     python -m pip install --upgrade pip
                     pip install -r requirements.txt
+
+                    mkdir -p test-results
                 '''
             }
         }
@@ -56,15 +128,18 @@ pipeline {
         stage('Unit Test') {
             steps {
                 sh '''
+                    set -e
+
                     cd ${APP_DIR}
                     . .venv/bin/activate
-                    mkdir -p test-results
+
                     python -m pytest test/test_app.py -v --junitxml=test-results/unit.xml
                 '''
             }
+
             post {
                 always {
-                    junit 'app/test-results/unit.xml'
+                    junit allowEmptyResults: true, testResults: 'app/test-results/unit.xml'
                 }
             }
         }
@@ -72,6 +147,10 @@ pipeline {
         stage('Docker Build') {
             steps {
                 sh '''
+                    set -e
+
+                    echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
+
                     docker build \
                       -t ${IMAGE_NAME}:${IMAGE_TAG} \
                       -t ${IMAGE_NAME}:latest \
@@ -90,9 +169,13 @@ pipeline {
                     )
                 ]) {
                     sh '''
+                        set -e
+
                         echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
+
                         docker push ${IMAGE_NAME}:${IMAGE_TAG}
                         docker push ${IMAGE_NAME}:latest
+
                         docker logout
                     '''
                 }
@@ -102,7 +185,18 @@ pipeline {
         stage('Helm Lint') {
             steps {
                 sh '''
+                    set -e
+
                     helm lint ${HELM_CHART_DIR}
+                    helm template ${HELM_RELEASE} ${HELM_CHART_DIR} \
+                      --set image.repository=${IMAGE_NAME} \
+                      --set image.tag=${IMAGE_TAG} \
+                      --set env.APP_ENV=production \
+                      --set "imagePullSecrets[0].name=${IMAGE_PULL_SECRET}" \
+                      > /tmp/rendered-chart.yaml
+
+                    echo "Rendered Helm chart preview:"
+                    head -n 80 /tmp/rendered-chart.yaml
                 '''
             }
         }
@@ -110,7 +204,12 @@ pipeline {
         stage('Deploy to Kubernetes with Helm') {
             steps {
                 withCredentials([
-                    file(credentialsId: 'kubeconfig-kind', variable: 'KUBECONFIG_FILE')
+                    file(credentialsId: 'kubeconfig-kind', variable: 'KUBECONFIG_FILE'),
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
                 ]) {
                     sh '''
                         set -e
@@ -125,72 +224,54 @@ pipeline {
                           --dry-run=client \
                           -o yaml | kubectl apply -f -
 
-                        echo "Getting current Helm revision for rollback..."
-                        PREV_REVISION=$(helm history ${HELM_RELEASE} \
-                          -n ${K8S_NAMESPACE} 2>/dev/null | awk 'END {if (NR>1) print $1}' || true)
+                        echo "Creating or updating imagePullSecret..."
+                        kubectl -n ${K8S_NAMESPACE} create secret docker-registry ${IMAGE_PULL_SECRET} \
+                          --docker-server=https://index.docker.io/v1/ \
+                          --docker-username="${DOCKERHUB_USER}" \
+                          --docker-password="${DOCKERHUB_TOKEN}" \
+                          --dry-run=client \
+                          -o yaml | kubectl apply -f -
 
-                        echo "Previous revision: ${PREV_REVISION}"
+                        echo "Verifying imagePullSecret..."
+                        kubectl -n ${K8S_NAMESPACE} get secret ${IMAGE_PULL_SECRET}
+
+                        echo "Getting current Helm history before deployment..."
+                        helm history ${HELM_RELEASE} -n ${K8S_NAMESPACE} || true
 
                         echo "Deploying with Helm..."
-                        set +e
                         helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_DIR} \
                           --namespace ${K8S_NAMESPACE} \
                           --set image.repository=${IMAGE_NAME} \
                           --set image.tag=${IMAGE_TAG} \
                           --set env.APP_ENV=production \
+                          --set "imagePullSecrets[0].name=${IMAGE_PULL_SECRET}" \
                           --wait \
                           --atomic \
                           --timeout 3m
-                        HELM_STATUS=$?
-                        set -e
-
-                        if [ ${HELM_STATUS} -ne 0 ]; then
-                            echo "Helm deployment failed."
-
-                            if [ -n "${PREV_REVISION}" ]; then
-                                echo "Rolling back to revision ${PREV_REVISION}..."
-                                helm rollback ${HELM_RELEASE} ${PREV_REVISION} -n ${K8S_NAMESPACE} --wait --timeout 3m
-                            else
-                                echo "No previous revision found. Rollback skipped."
-                            fi
-
-                            exit ${HELM_STATUS}
-                        fi
 
                         echo "Checking rollout status..."
                         kubectl -n ${K8S_NAMESPACE} rollout status deployment/${HELM_RELEASE} --timeout=120s
 
-                        echo "Starting port-forward for health check..."
-                        kubectl -n ${K8S_NAMESPACE} port-forward svc/${HELM_RELEASE} ${LOCAL_CHECK_PORT}:5000 > /tmp/port-forward.log 2>&1 &
-                        PF_PID=$!
-
-                        cleanup() {
-                            kill ${PF_PID} 2>/dev/null || true
-                        }
-                        trap cleanup EXIT
-
-                        sleep 5
-
-                        echo "Running health check..."
-                        if ! curl -fsS http://127.0.0.1:${LOCAL_CHECK_PORT}/; then
-                            echo "Health check failed."
-                            cat /tmp/port-forward.log || true
-
-                            echo "Application logs:"
-                            kubectl -n ${K8S_NAMESPACE} logs deployment/${HELM_RELEASE} --tail=100 || true
-
-                            if [ -n "${PREV_REVISION}" ]; then
-                                echo "Rolling back to revision ${PREV_REVISION}..."
-                                helm rollback ${HELM_RELEASE} ${PREV_REVISION} -n ${K8S_NAMESPACE} --wait --timeout 3m
-                            else
-                                echo "No previous revision found. Rollback skipped."
-                            fi
-
-                            exit 1
-                        fi
-
-                        echo "Helm deployment and health check completed successfully."
+                        echo "Deployment completed successfully."
                     '''
+                }
+            }
+        }
+
+        stage('Integration Test') {
+            steps {
+                withCredentials([
+                    file(credentialsId: 'kubeconfig-kind', variable: 'KUBECONFIG_FILE')
+                ]) {
+                    script {
+                        runIntegrationTest()
+                    }
+                }
+            }
+
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'app/test-results/integration.xml'
                 }
             }
         }
@@ -205,7 +286,7 @@ pipeline {
         }
 
         failure {
-            echo "Pipeline failed. Check failed stage logs."
+            echo "Pipeline failed. Check the failed stage logs."
         }
 
         always {
@@ -213,19 +294,28 @@ pipeline {
                 file(credentialsId: 'kubeconfig-kind', variable: 'KUBECONFIG_FILE')
             ]) {
                 sh '''
+                    set +e
+
                     export KUBECONFIG="${KUBECONFIG_FILE}"
+
                     echo "Current Kubernetes resources:"
-                    kubectl -n ${K8S_NAMESPACE} get all || true
+                    kubectl -n ${K8S_NAMESPACE} get all
+
+                    echo "Current pods:"
+                    kubectl -n ${K8S_NAMESPACE} get pods -o wide
 
                     echo "Helm history:"
-                    helm history ${HELM_RELEASE} -n ${K8S_NAMESPACE} || true
+                    helm history ${HELM_RELEASE} -n ${K8S_NAMESPACE}
                 '''
             }
         }
 
         cleanup {
             sh '''
-                docker image prune -f || true
+                set +e
+
+                echo "Cleaning unused Docker images..."
+                docker image prune -f
             '''
         }
     }
