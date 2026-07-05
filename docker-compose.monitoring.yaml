@@ -8,15 +8,16 @@ services:
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./monitoring/prometheus/secrets/jenkins_api_token.txt:/etc/prometheus/secrets/jenkins_api_token.txt:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--web.enable-lifecycle"
     networks:
+      - monitoring
       - cicd
       - kind
-      - monitoring
 
   grafana:
     image: grafana/grafana:11.3.0
@@ -35,6 +36,8 @@ services:
       - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/prometheus/secrets/jenkins_api_token.txt:/etc/prometheus/secrets/jenkins_api_token.txt:ro
+
     networks:
       - monitoring
 
@@ -46,8 +49,10 @@ volumes:
 networks:
   monitoring:
     name: monitoring-network
+
   cicd:
     external: true
     name: cicd-network
+
   kind:
     external: true

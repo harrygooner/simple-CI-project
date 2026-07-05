@@ -20,6 +20,6 @@ scrape_configs:
     static_configs:
       - targets:
           - "jenkins-controller:8080"
-        labels:
-          service: "jenkins-controller"
-          environment: "ci"
+    basic_auth:
+      username: "admin"
+      password_file: /etc/prometheus/secrets/jenkins_api_token.txt

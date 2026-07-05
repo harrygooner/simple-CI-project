@@ -1,294 +1,1375 @@
 {
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
   "id": null,
-  "uid": "devops-case-study-resource-monitoring",
-  "title": "DevOps Case Study - App, Jenkins & K8s Pod Observability",
-  "timezone": "browser",
-  "schemaVersion": 39,
-  "version": 2,
-  "refresh": "10s",
+  "links": [],
+  "liveNow": false,
   "panels": [
     {
+      "id": 1,
+      "type": "row",
+      "title": "Service Availability",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
       "type": "stat",
       "title": "Python App Up",
+      "description": "Current scrape status for the Flask application metrics endpoint.",
+      "datasource": "Prometheus",
       "gridPos": {
-        "x": 0,
-        "y": 0,
+        "h": 4,
         "w": 6,
-        "h": 4
+        "x": 0,
+        "y": 1
       },
       "targets": [
         {
-          "expr": "up{job=\"python-app\"}",
-          "legendFormat": "app"
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "max_over_time(up{job=\"$app_job\"}[2m])",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
           "mappings": [
             {
               "type": "value",
               "options": {
                 "0": {
-                  "text": "DOWN"
+                  "text": "DOWN",
+                  "color": "red"
                 },
                 "1": {
-                  "text": "UP"
+                  "text": "UP",
+                  "color": "green"
                 }
               }
             }
           ]
         },
         "overrides": []
-      },
-      "id": 1
-    },
-    {
-      "type": "stat",
-      "title": "Jenkins Up",
-      "gridPos": {
-        "x": 6,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "expr": "up{job=\"jenkins\"}",
-          "legendFormat": "jenkins"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "DOWN"
-                },
-                "1": {
-                  "text": "UP"
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "id": 2
-    },
-    {
-      "type": "timeseries",
-      "title": "Application Request Rate",
-      "gridPos": {
-        "x": 0,
-        "y": 4,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(flask_http_requests_total[1m]))",
-          "legendFormat": "requests/sec"
-        }
-      ],
-      "id": 3
-    },
-    {
-      "type": "timeseries",
-      "title": "Application Status Code Rate",
-      "gridPos": {
-        "x": 12,
-        "y": 4,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "expr": "sum by (http_status) (rate(flask_http_requests_total[1m]))",
-          "legendFormat": "{{http_status}}"
-        }
-      ],
-      "id": 4
-    },
-    {
-      "type": "timeseries",
-      "title": "Application P95 Latency",
-      "gridPos": {
-        "x": 0,
-        "y": 11,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(flask_http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p95 latency"
-        }
-      ],
-      "id": 5
-    },
-    {
-      "type": "timeseries",
-      "title": "Application P50 Latency",
-      "gridPos": {
-        "x": 12,
-        "y": 11,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(flask_http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p50 latency"
-        }
-      ],
-      "id": 6
-    },
-    {
-      "type": "timeseries",
-      "title": "HTTP Requests by Endpoint",
-      "gridPos": {
-        "x": 0,
-        "y": 18,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "expr": "sum by (endpoint) (rate(flask_http_requests_total[1m]))",
-          "legendFormat": "{{endpoint}}"
-        }
-      ],
-      "id": 7
-    },
-    {
-      "type": "timeseries",
-      "title": "5xx Error Rate",
-      "gridPos": {
-        "x": 12,
-        "y": 18,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(flask_http_requests_total{http_status=~\"5..\"}[1m]))",
-          "legendFormat": "5xx/sec"
-        }
-      ],
-      "id": 8
-    },
-    {
-      "type": "text",
-      "title": "Resource Metrics Notes",
-      "gridPos": {
-        "x": 0,
-        "y": 25,
-        "w": 24,
-        "h": 5
       },
       "options": {
-        "mode": "markdown",
-        "content": "Resource panels below focus only on **Kubernetes application Pod metrics**: Pod CPU, Pod memory, restart count and Deployment available replicas. These panels do **not** use a standalone cAdvisor container in Docker Compose. They require Kubernetes-native metrics such as kubelet/cAdvisor metrics and kube-state-metrics, for example through `kube-prometheus-stack`. If kube-prometheus-stack is not installed or connected as a data source, these panels may show no data."
-      },
-      "id": 9
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
     },
     {
+      "id": 3,
+      "type": "stat",
+      "title": "Jenkins Up",
+      "description": "Current scrape status for Jenkins Prometheus metrics.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "max_over_time(up{job=\"$jenkins_job\"}[2m])",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Deployment Available Replicas",
+      "description": "Current number of available replicas for the application deployment.",
+      "datasource": "Kubernetes-Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": "Kubernetes-Prometheus",
+          "editorMode": "code",
+          "expr": "max(kube_deployment_status_replicas_available{namespace=\"$namespace\", deployment=\"$deployment\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Running App Pods",
+      "description": "Number of app pods currently in Running phase.",
+      "datasource": "Kubernetes-Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": "Kubernetes-Prometheus",
+          "editorMode": "code",
+          "expr": "sum(kube_pod_status_phase{namespace=\"$namespace\", pod=~\"$deployment.*\", phase=\"Running\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "Application HTTP Metrics",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Application Request Rate",
+      "description": "Total request rate scraped from the Flask /metrics endpoint.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "sum(rate(flask_http_requests_total{job=\"$app_job\"}[5m]))",
+          "legendFormat": "requests/sec",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Application p95 Latency",
+      "description": "95th percentile HTTP request latency from application histogram metrics.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(flask_http_request_duration_seconds_bucket{job=\"$app_job\"}[5m])) by (le))",
+          "legendFormat": "p95 latency",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Application Requests by Endpoint",
+      "description": "Request rate grouped by endpoint label.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "sum by (endpoint) (rate(flask_http_requests_total{job=\"$app_job\"}[5m]))",
+          "legendFormat": "{{endpoint}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Prometheus Scrape Duration",
+      "description": "Prometheus scrape duration for app and Jenkins targets.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "scrape_duration_seconds{job=\"$app_job\"}",
+          "legendFormat": "app scrape",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "scrape_duration_seconds{job=\"$jenkins_job\"}",
+          "legendFormat": "jenkins scrape",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "Kubernetes App Resource Metrics",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 12,
       "type": "timeseries",
       "title": "App Pod CPU Usage",
+      "description": "CPU usage per application Pod. Requires Kubernetes Prometheus / kube-prometheus-stack metrics.",
+      "datasource": "Kubernetes-Prometheus",
       "gridPos": {
-        "x": 0,
-        "y": 30,
+        "h": 7,
         "w": 12,
-        "h": 8
+        "x": 0,
+        "y": 21
       },
       "targets": [
         {
-          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"devops-demo\", pod=~\"python-app.*\", container!=\"POD\", image!=\"\"}[5m]))",
-          "legendFormat": "{{pod}}"
+          "datasource": "Kubernetes-Prometheus",
+          "editorMode": "code",
+          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$deployment.*\", container!=\"POD\", image!=\"\"}[5m]))",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "cores"
+          "unit": "cores",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
         },
         "overrides": []
       },
-      "description": "CPU usage of python-app Pods in Kubernetes. Requires kubelet/cAdvisor metrics or kube-prometheus-stack.",
-      "id": 10
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
     },
     {
+      "id": 13,
       "type": "timeseries",
       "title": "App Pod Memory Usage",
+      "description": "Memory working set per application Pod. Requires Kubernetes Prometheus / kube-prometheus-stack metrics.",
+      "datasource": "Kubernetes-Prometheus",
       "gridPos": {
-        "x": 12,
-        "y": 30,
+        "h": 7,
         "w": 12,
-        "h": 8
+        "x": 12,
+        "y": 21
       },
       "targets": [
         {
-          "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"devops-demo\", pod=~\"python-app.*\", container!=\"POD\", image!=\"\"})",
-          "legendFormat": "{{pod}}"
+          "datasource": "Kubernetes-Prometheus",
+          "editorMode": "code",
+          "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$deployment.*\", container!=\"POD\", image!=\"\"})",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes"
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
         },
         "overrides": []
       },
-      "description": "Memory working set of python-app Pods. Requires kubelet/cAdvisor metrics or kube-prometheus-stack.",
-      "id": 11
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
     },
     {
+      "id": 14,
       "type": "timeseries",
       "title": "App Pod Restart Count",
+      "description": "Container restart count for application Pods.",
+      "datasource": "Kubernetes-Prometheus",
       "gridPos": {
-        "x": 0,
-        "y": 38,
+        "h": 7,
         "w": 12,
-        "h": 8
+        "x": 0,
+        "y": 28
       },
       "targets": [
         {
-          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"devops-demo\", pod=~\"python-app.*\"})",
-          "legendFormat": "{{pod}}"
+          "datasource": "Kubernetes-Prometheus",
+          "editorMode": "code",
+          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"$namespace\", pod=~\"$deployment.*\"})",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "none"
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
         },
         "overrides": []
       },
-      "description": "Restart count of python-app Pods. Requires kube-state-metrics.",
-      "id": 12
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
     },
     {
+      "id": 15,
       "type": "timeseries",
-      "title": "Deployment Available Replicas",
+      "title": "Deployment Available Replicas Over Time",
+      "description": "Available vs desired replicas for the application deployment.",
+      "datasource": "Kubernetes-Prometheus",
       "gridPos": {
-        "x": 12,
-        "y": 38,
+        "h": 7,
         "w": 12,
-        "h": 8
+        "x": 12,
+        "y": 28
       },
       "targets": [
         {
-          "expr": "kube_deployment_status_replicas_available{namespace=\"devops-demo\", deployment=\"python-app\"}",
-          "legendFormat": "available replicas"
+          "datasource": "Kubernetes-Prometheus",
+          "editorMode": "code",
+          "expr": "kube_deployment_status_replicas_available{namespace=\"$namespace\", deployment=\"$deployment\"}",
+          "legendFormat": "available replicas",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": "Kubernetes-Prometheus",
+          "editorMode": "code",
+          "expr": "kube_deployment_spec_replicas{namespace=\"$namespace\", deployment=\"$deployment\"}",
+          "legendFormat": "desired replicas",
+          "range": true,
+          "instant": false,
+          "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "none"
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
         },
         "overrides": []
       },
-      "description": "Available replicas for python-app Deployment. Requires kube-state-metrics.",
-      "id": 13
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "row",
+      "title": "Jenkins CI/CD Metrics",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "Jenkins Queue Size",
+      "description": "Number of builds waiting in Jenkins queue. High values can indicate unavailable agents or build bottlenecks.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 36
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "max({job=\"$jenkins_job\", __name__=~\"jenkins_queue_size_value|default_jenkins_queue_size_value\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Jenkins Executor Availability",
+      "description": "Percentage of free Jenkins executors. Low values mean Jenkins agents are busy or capacity is limited.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 36
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "100 * max({job=\"$jenkins_job\", __name__=~\"jenkins_executor_free_value|default_jenkins_executor_free_value\"}) / max({job=\"$jenkins_job\", __name__=~\"jenkins_executor_count_value|default_jenkins_executor_count_value\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "Jenkins Last Build Result",
+      "description": "Latest Jenkins build result ordinal mapped to SUCCESS, UNSTABLE, FAILURE, NOT_BUILT, or ABORTED.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 36
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "max({job=\"$jenkins_job\", __name__=~\"default_jenkins_builds_last_build_result_ordinal|jenkins_builds_last_build_result_ordinal\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "SUCCESS",
+                  "color": "green"
+                },
+                "1": {
+                  "text": "UNSTABLE",
+                  "color": "yellow"
+                },
+                "2": {
+                  "text": "FAILURE",
+                  "color": "red"
+                },
+                "3": {
+                  "text": "NOT_BUILT",
+                  "color": "gray"
+                },
+                "4": {
+                  "text": "ABORTED",
+                  "color": "orange"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "Jenkins Last Build Duration",
+      "description": "Duration of the latest Jenkins build in seconds.",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 36
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "editorMode": "code",
+          "expr": "max({job=\"$jenkins_job\", __name__=~\"default_jenkins_builds_last_build_duration_milliseconds|jenkins_builds_last_build_duration_milliseconds\"}) / 1000",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
     }
-  ]
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "devops",
+    "jenkins",
+    "kubernetes",
+    "prometheus",
+    "case-study",
+    "k8s-datasource-name"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "python-app",
+          "value": "python-app"
+        },
+        "hide": 0,
+        "label": "App metrics job",
+        "name": "app_job",
+        "options": [
+          {
+            "selected": true,
+            "text": "python-app",
+            "value": "python-app"
+          }
+        ],
+        "query": "python-app",
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "jenkins",
+          "value": "jenkins"
+        },
+        "hide": 0,
+        "label": "Jenkins metrics job",
+        "name": "jenkins_job",
+        "options": [
+          {
+            "selected": true,
+            "text": "jenkins",
+            "value": "jenkins"
+          }
+        ],
+        "query": "jenkins",
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "devops-demo",
+          "value": "devops-demo"
+        },
+        "hide": 0,
+        "label": "Kubernetes namespace",
+        "name": "namespace",
+        "options": [
+          {
+            "selected": true,
+            "text": "devops-demo",
+            "value": "devops-demo"
+          }
+        ],
+        "query": "devops-demo",
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "python-app",
+          "value": "python-app"
+        },
+        "hide": 0,
+        "label": "Deployment",
+        "name": "deployment",
+        "options": [
+          {
+            "selected": true,
+            "text": "python-app",
+            "value": "python-app"
+          }
+        ],
+        "query": "python-app",
+        "type": "constant"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "DevOps Case Study - CI/CD, Kubernetes & Jenkins Monitoring",
+  "uid": "devops-case-study-monitoring-final",
+  "version": 1,
+  "weekStart": ""
 }
