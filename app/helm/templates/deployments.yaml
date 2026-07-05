@@ -24,4 +24,4 @@ spec:
             - name: APP_ENV
               value: {{ .Values.env | quote }}
           imagePullSecrets:
-          - name: regcred
+          - name: dockerhub-creds

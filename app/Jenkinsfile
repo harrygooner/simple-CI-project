@@ -1,89 +1,195 @@
 pipeline {
-    agent any
+    agent {
+        label 'docker-agent'
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
 
     environment {
-        DOCKER_IMAGE = "thitbobam/python-app"
-        IMAGE_TAG = "v${env.BUILD_NUMBER}"
-        HELM_RELEASE_NAME = "python-app-release"
-        HELM_DIR = "./app/helm"
-        K8S_NAMESPACE = "default"
-        APP_NAME = "python-app-release-python-app"
+        APP_DIR = 'app'
+        HELM_CHART_DIR = 'app/helm'
+
+        IMAGE_NAME = 'thitbobam/python-app'
+        IMAGE_TAG = "v${BUILD_NUMBER}"
+
+        K8S_NAMESPACE = 'devops-demo'
+        HELM_RELEASE = 'python-app'
+        LOCAL_CHECK_PORT = '8081'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                echo "1. Lấy mã nguồn mới nhất từ Repository..."
                 checkout scm
+            }
+        }
+
+        stage('Prepare') {
+            steps {
+                sh '''
+                    echo "Checking tools..."
+                    python3 --version
+                    docker --version
+                    kubectl version --client
+                    helm version
+                '''
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    cd ${APP_DIR}
+                    python3 -m venv .venv
+                    . .venv/bin/activate
+                    python -m pip install --upgrade pip
+                    pip install -r requirements.txt
+                '''
             }
         }
 
         stage('Unit Test') {
             steps {
-                echo "2. Chạy Unit Test cho ứng dụng Python..."
                 sh '''
-                    set -e
-                    python3 -m pip install --upgrade pip
-                    python3 -m pip install -r app/requirements.txt
-                    python3 -m pytest app/test/test_app.py
+                    cd ${APP_DIR}
+                    . .venv/bin/activate
+                    mkdir -p test-results
+                    python -m pytest test/test_app.py -v --junitxml=test-results/unit.xml
                 '''
             }
-        }
-
-        stage('Build & Push Docker Image') {
-            steps {
-                script {
-                    echo "3. Build và Push Image: ${DOCKER_IMAGE}:${IMAGE_TAG}"
-                    withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-                        sh '''
-                            set -e
-                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                            docker build -t "$DOCKER_IMAGE:$IMAGE_TAG" ./app
-                            docker push "$DOCKER_IMAGE:$IMAGE_TAG"
-                        '''
-                    }
+            post {
+                always {
+                    junit 'app/test-results/unit.xml'
                 }
             }
         }
 
-        stage('Deploy to K8s with Helm') {
+        stage('Docker Build') {
             steps {
-                echo "4. Triển khai ứng dụng lên Kubernetes bằng Helm..."
                 sh '''
-                    set -e
-                    helm upgrade --install "$HELM_RELEASE_NAME" "$HELM_DIR" \
-                        --set image.repository="$DOCKER_IMAGE" \
-                        --set image.tag="$IMAGE_TAG" \
-                        --namespace "$K8S_NAMESPACE"
+                    docker build \
+                      -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                      -t ${IMAGE_NAME}:latest \
+                      ${APP_DIR}
                 '''
             }
         }
 
-        stage('Integration Test & Health Check') {
+        stage('Docker Push') {
             steps {
-                script {
-                    echo "5. Kiểm tra sức khỏe server sau khi deploy..."
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${IMAGE_NAME}:latest
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Helm Lint') {
+            steps {
+                sh '''
+                    helm lint ${HELM_CHART_DIR}
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes with Helm') {
+            steps {
+                withCredentials([
+                    file(credentialsId: 'kubeconfig-kind', variable: 'KUBECONFIG_FILE')
+                ]) {
                     sh '''
                         set -e
-                        kubectl rollout status deployment/$APP_NAME \
-                            --namespace "$K8S_NAMESPACE" \
-                            --timeout=90s
 
-                        kubectl port-forward service/$APP_NAME 8080:80 \
-                            --namespace "$K8S_NAMESPACE" > /tmp/port-forward.log 2>&1 &
-                        PORT_FORWARD_PID=$!
+                        export KUBECONFIG="${KUBECONFIG_FILE}"
+
+                        echo "Checking Kubernetes connection..."
+                        kubectl get nodes
+
+                        echo "Ensuring namespace exists..."
+                        kubectl create namespace ${K8S_NAMESPACE} \
+                          --dry-run=client \
+                          -o yaml | kubectl apply -f -
+
+                        echo "Getting current Helm revision for rollback..."
+                        PREV_REVISION=$(helm history ${HELM_RELEASE} \
+                          -n ${K8S_NAMESPACE} 2>/dev/null | awk 'END {if (NR>1) print $1}' || true)
+
+                        echo "Previous revision: ${PREV_REVISION}"
+
+                        echo "Deploying with Helm..."
+                        set +e
+                        helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_DIR} \
+                          --namespace ${K8S_NAMESPACE} \
+                          --set image.repository=${IMAGE_NAME} \
+                          --set image.tag=${IMAGE_TAG} \
+                          --set env.APP_ENV=production \
+                          --wait \
+                          --atomic \
+                          --timeout 3m
+                        HELM_STATUS=$?
+                        set -e
+
+                        if [ ${HELM_STATUS} -ne 0 ]; then
+                            echo "Helm deployment failed."
+
+                            if [ -n "${PREV_REVISION}" ]; then
+                                echo "Rolling back to revision ${PREV_REVISION}..."
+                                helm rollback ${HELM_RELEASE} ${PREV_REVISION} -n ${K8S_NAMESPACE} --wait --timeout 3m
+                            else
+                                echo "No previous revision found. Rollback skipped."
+                            fi
+
+                            exit ${HELM_STATUS}
+                        fi
+
+                        echo "Checking rollout status..."
+                        kubectl -n ${K8S_NAMESPACE} rollout status deployment/${HELM_RELEASE} --timeout=120s
+
+                        echo "Starting port-forward for health check..."
+                        kubectl -n ${K8S_NAMESPACE} port-forward svc/${HELM_RELEASE} ${LOCAL_CHECK_PORT}:5000 > /tmp/port-forward.log 2>&1 &
+                        PF_PID=$!
 
                         cleanup() {
-                            kill $PORT_FORWARD_PID 2>/dev/null || true
+                            kill ${PF_PID} 2>/dev/null || true
                         }
                         trap cleanup EXIT
 
                         sleep 5
-                        APP_URL="http://localhost:8080/" python3 -m pytest app/test/integration_test.py
+
+                        echo "Running health check..."
+                        if ! curl -fsS http://127.0.0.1:${LOCAL_CHECK_PORT}/; then
+                            echo "Health check failed."
+                            cat /tmp/port-forward.log || true
+
+                            echo "Application logs:"
+                            kubectl -n ${K8S_NAMESPACE} logs deployment/${HELM_RELEASE} --tail=100 || true
+
+                            if [ -n "${PREV_REVISION}" ]; then
+                                echo "Rolling back to revision ${PREV_REVISION}..."
+                                helm rollback ${HELM_RELEASE} ${PREV_REVISION} -n ${K8S_NAMESPACE} --wait --timeout 3m
+                            else
+                                echo "No previous revision found. Rollback skipped."
+                            fi
+
+                            exit 1
+                        fi
+
+                        echo "Helm deployment and health check completed successfully."
                     '''
                 }
             }
@@ -92,17 +198,35 @@ pipeline {
 
     post {
         success {
-            echo "✅ TẤT CẢ THÀNH CÔNG! Ứng dụng phiên bản ${IMAGE_TAG} đã được live."
+            echo "Pipeline completed successfully."
+            echo "Image pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Helm release: ${HELM_RELEASE}"
+            echo "Namespace: ${K8S_NAMESPACE}"
         }
+
         failure {
-            echo "❌ PIPELINE THẤT BẠI! Đang rollback về phiên bản an toàn trước đó..."
-            sh '''
-                helm rollback "$HELM_RELEASE_NAME" --namespace "$K8S_NAMESPACE" \
-                    || echo "Rollback không thành công hoặc đây là lần deploy đầu tiên."
-            '''
+            echo "Pipeline failed. Check failed stage logs."
         }
+
         always {
-            sh 'docker logout || true'
+            withCredentials([
+                file(credentialsId: 'kubeconfig-kind', variable: 'KUBECONFIG_FILE')
+            ]) {
+                sh '''
+                    export KUBECONFIG="${KUBECONFIG_FILE}"
+                    echo "Current Kubernetes resources:"
+                    kubectl -n ${K8S_NAMESPACE} get all || true
+
+                    echo "Helm history:"
+                    helm history ${HELM_RELEASE} -n ${K8S_NAMESPACE} || true
+                '''
+            }
+        }
+
+        cleanup {
+            sh '''
+                docker image prune -f || true
+            '''
         }
     }
 }
