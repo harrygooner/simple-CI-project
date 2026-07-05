@@ -1,0 +1,24 @@
+# Optional Kubernetes-native monitoring stack for Pod/Node resource metrics.
+# Use this only if you want Prometheus/Grafana inside Kubernetes for kubelet, kube-state-metrics and node-exporter metrics.
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: admin123
+  service:
+    type: ClusterIP
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+alertmanager:
+  enabled: true

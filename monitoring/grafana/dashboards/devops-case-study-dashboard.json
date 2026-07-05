@@ -1,0 +1,189 @@
+{
+  "id": null,
+  "uid": "devops-case-study-no-cadvisor",
+  "title": "DevOps Case Study - App & Jenkins Observability",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Python App Up",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"python-app\"}",
+          "legendFormat": "app"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Jenkins Up",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"jenkins\"}",
+          "legendFormat": "jenkins"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Application Request Rate",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(flask_http_requests_total[1m]))",
+          "legendFormat": "requests/sec"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Application Status Code Rate",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "sum by (http_status) (rate(flask_http_requests_total[1m]))",
+          "legendFormat": "{{http_status}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Application P95 Latency",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(flask_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 latency"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Application P50 Latency",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(flask_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50 latency"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Requests by Endpoint",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "sum by (endpoint) (rate(flask_http_requests_total[1m]))",
+          "legendFormat": "{{endpoint}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "5xx Error Rate",
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(flask_http_requests_total{http_status=~\"5..\"}[1m]))",
+          "legendFormat": "5xx/sec"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "title": "Kubernetes Resource Metrics Note",
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "This dashboard intentionally excludes standalone cAdvisor. For Kubernetes Pod CPU/Memory, install kube-prometheus-stack and query kubelet/kube-state-metrics metrics such as `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`, and `kube_pod_container_status_restarts_total`. See `monitoring/kubernetes/POD_RESOURCE_PROMQL.md`."
+      }
+    }
+  ]
+}

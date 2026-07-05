@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: "DevOps Case Study Dashboards"
+    orgId: 1
+    folder: "DevOps Case Study"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
