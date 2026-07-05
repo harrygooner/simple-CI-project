@@ -3,23 +3,31 @@ services:
     image: jenkins/jenkins:lts-jdk17
     container_name: jenkins-controller
     user: root
+
     ports:
       - "8080:8080"
       - "50000:50000"
+
     volumes:
       - jenkins_home:/var/jenkins_home
+
     networks:
       - cicd
 
   docker-agent:
     build:
       context: ./jenkins/agent
+
     container_name: jenkins-docker-agent
+
     user: root
+
     depends_on:
       - jenkins
+
     environment:
       - JENKINS_URL=http://jenkins:8080/
+
     command:
       [
         "-url",
@@ -27,8 +35,10 @@ services:
         "${JENKINS_AGENT_SECRET}",
         "docker-agent"
       ]
+
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
     networks:
       - cicd
       - kind
@@ -39,5 +49,6 @@ volumes:
 networks:
   cicd:
     name: cicd-network
+
   kind:
     external: true
